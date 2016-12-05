@@ -1,0 +1,64 @@
+#Forecasting Using an ARIMA model
+#Make sure that your series is stationary i.e. constant mean and variance over time 
+#If your series is non-stationary then make it stationary by using differencing 
+
+#Differencing a Time series 
+#ARIMA models are defiend for stationary time series. Therefore, if you start off with a non-stationary time series, you will first
+#need to 'difference' the time series until you obtain a stationary time series 
+
+#If you have to difference the time series d times to obtain a stationary series, then you have an ARIMA(p,d,q) model, 
+#where d is the order of differencing used.
+
+skirts <- scan("http://robjhyndman.com/tsdldata/roberts/skirts.dat",skip=5)
+
+skirts_timeseries <- ts(skirts, start = c(1866))
+
+plot.ts(skirts_timeseries)
+
+skirts_timeseries_diff1 <- diff(skirts_timeseries, differences = 1)
+
+plot.ts(skirts_timeseries_diff1)
+
+#The resulting time series of first differences (above) does not appear to be stationary in mean
+#herefore, we can difference the time series twice, to see if that gives us a stationary time series:
+
+skirts_timeseries_diff2 <- diff(skirts_timeseries, differences = 2)
+plot(skirts_timeseries_diff2)
+#It appears that we need to difference the time series of the diameter of skirts twice in order to achieve a stationary series.
+
+
+
+#Other way 
+#skirts_timeseries_diff2 <- diff(skirts_timeseries_diff1, differences = 1)
+
+#The time series of second differences (above) does appear to be stationary in mean and variance
+#as the level of the series stays roughly constant over time, and the variance of the series appears roughly constant over time
+
+#Formal Test of Stationarity 
+#Formal tests for stationarity called “unit root tests” are available in the fUnitRoots package
+
+
+# The next step is to figure out the values of p and q for the ARIMA model.
+
+
+
+
+#Shortcut - Finding the ARIMA model
+auto.arima(skirts_timeseries, ic = "bic")
+
+
+skirts_timeseries_arima <- arima(skirts_timeseries, order = c(1,2,0))
+
+
+#Using ARIMA model to make forecast for our future values 
+library('forecast')
+skirts_timeseries_arima_forecasts <- forecast.Arima(skirts_timeseries_arima, h = 19)
+
+plot.forecast(skirts_timeseries_arima_forecasts)
+
+skirts_timeseries_arima
+auto.arima(skirts_timeseries) # supply the RAW time series  data
+
+auto.arima(kings_timeseries, ic = "bic")
+auto.arima(skirts_timeseries)
+auto.arima(volcano_dustseries, ic = "bic")
