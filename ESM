@@ -1,0 +1,288 @@
+kings <- scan("http://robjhyndman.com/tsdldata/misc/kings.dat",skip=3)
+kings 
+
+#Converting it into time series data 
+kings_timeseries <- ts(kings)
+kings_timeseries
+
+#Birth data set 
+#This time let us specify the frequency.  for example monthly or quaterly 
+births <- scan("http://robjhyndman.com/tsdldata/data/nybirths.dat")
+
+# For monthly time series data set frequencty =12 
+# We can also specify the first year that the data were collected 1946 and first interval in that year 1 by using 'start' 
+#function
+births_timeseries <- ts(births, frequency = 12, start = c(1946,1))
+
+births_timeseries
+
+
+souvenir <- scan("http://robjhyndman.com/tsdldata/data/fancy.dat")
+souvenir_timeseries <- ts(souvenir, frequency = 12, start = c(1987,1))
+souvenir_timeseries
+
+
+#Plotting Time Series 
+plot.ts(kings_timeseries) #random pattern. Fluctuation are constant in size . Additive model
+
+
+plot.ts(births_timeseries) #Seasonal Variation #Increasing Trend 
+
+plot.ts(souvenir)
+
+#The fluctuation is not constant(seasonal fluctuation and random fluctuation)
+log_souvenir_time_series <- log(souvenir_timeseries)
+
+plot.ts(log_souvenir_time_series)
+
+
+#Decomposing Time Series 
+#install.packages("TTR")
+library("TTR")
+
+#Decompsing Non-Seasonal Data
+#smoothing using a simple moving average
+#stimate the trend component of this time series by smoothing using a simple moving average
+
+kings_timeseries_SMA_3 <- SMA(kings_timeseries, n = 3)
+plot(kings_timeseries_SMA_3)
+
+kings_timeseries_SMA_8 <- SMA(kings_timeseries, n = 8)
+plot(kings_timeseries_SMA_8)
+
+# This takes a little bit of trial-and-error, to find the right amount of smoothing. 
+#For example, we can try using a simple moving average of order 8
+
+#Decomposing Seasonal Data ( Trend, Seasonality and Error) described using an additive model
+births_timeseries_component <- decompose(births_timeseries)
+plot(births_timeseries_component)
+
+#Printing out the component of time series 
+births_timeseries_component$trend
+births_timeseries_component$seasonal
+
+
+#Seasonally Adjusted 
+#If you have a seasonal time series that can be described using an additive model, you can seasonally adjust the time series 
+#by estimating the seasonal component, and subtracting the estimated seasonal component from the original time series
+
+#Removing Seasonality 
+
+births_timeseries_seasonally_adjusted <- births_timeseries - births_timeseries_component$seasonal
+plot.ts(births_timeseries_seasonally_adjusted)
+
+#plot.ts(SMA(births_timeseries_seasonally_adjusted, n  =20)) what do you think ? #Treat it like non-seasonal data
+
+#Forecast Using Exponential Smoothing 
+#Used to make short-term forecast for time series data 
+#If your series can described using an additive model with constant level and no seasonality we can use exponential smoothing
+# to make short term forecasts 
+#alpha is between 0 to 1
+rain <- scan("http://robjhyndman.com/tsdldata/hurst/precip1.dat",skip=1)
+
+rain_timeseries <- ts(rain,start = c(1813))
+plot(rain_timeseries)
+#You can see from the plot that there is roughly constant level (the mean stays constant at about 25 inches).
+# so it is probably appropriate to describe the data using an additive model
+
+#For simple exponential smoothing use HoltWintes() in R beta = FALSE & gamma = FALSE
+
+rain_timeseries_forecast <- HoltWinters(rain_timeseries, beta = FALSE, gamma = FALSE)
+rain_timeseries_forecast
+
+
+#alpha parameter is about 0.024. This is very close to zero, telling us that the forecasts are based on both recent and 
+#less recent observations (although somewhat more weight is placed on recent observations).
+
+#By default, HoltWinters() just makes forecast for the same time period covered by the original time series 
+rain_timeseries_forecast$fitted  # forecasted Time Series 
+rain_timeseries  #Original Time Series 
+
+plot(rain_timeseries_forecast) #Original Time Series - in black 
+#Forecasted Time series - Red 
+
+#Calculating the SSE 
+rain_timeseries_forecast$SSE
+#It is common in simple exponential smoothing to use the first value in the time series as the initial value for the level
+
+#we can specify the initial value for the level in the HoltWinters() function by using the “l.start” parameter. 
+rain_timeseries_forecast_1 <- HoltWinters(rain_timeseries, beta = FALSE, gamma = FALSE, l.start = 23.56)
+rain_timeseries_forecast_2 <- HoltWinters(rain_timeseries, beta = FALSE, gamma = FALSE, l.start = 24.8239)
+
+rain_timeseries_forecast_1$SSE
+rain_timeseries_forecast_2$SSE
+# We decreased SSE by replacing the level by the mean of the time series (Original Thought)
+
+#Now we can make forecasts for the further time points by using the "forecast.HoltWinters() in the R "forecast" package
+
+#install.packages('forecast')
+library(forecast)
+rain_timeseries_forecast_3 <- forecast.HoltWinters(rain_timeseries_forecast_1, h = 8)
+#forecast.Holwinters(predictive_model, how many further time points you want to make forecasts for by using the “h” parameter)
+
+rain_timeseries_forecast_3
+plot.forecast(rain_timeseries_forecast_3)
+#the forecasts for 1913-1920 are plotted as a blue line
+#the 80% prediction interval as blue shaded area, and the 95% prediction interval as a gray shaded area.
+#The ‘forecast errors’ are calculated as the observed values - predicted values, for each time point.
+#We can only calculate the forecast errors(residuals) for the time period covered by our original time series,
+
+#If the predictive model cannot be improved upon, there should be no correlations between forecast errors 
+#for successive predictions.
+
+sum(rain_timeseries_forecast_3$residuals^2, na.rm = TRUE)
+rain_timeseries_forecast_1$SSE
+
+#In other words, if there are correlations between forecast errors for successive predictions, 
+#It is likely that the simple exponential smoothing forecasts could be improved upon by another forecasting technique. 
+
+#To figure out whether this is the case, we can obtain a correlogram of the in-sample forecast errors for lags 1-20.
+
+#removing NA's from rain_timseries_forecast_3$residuals
+rain_timeseries_forecast_3$residuals  <- rain_timeseries_forecast_3$residuals[!is.na(rain_timeseries_forecast_3$residuals)]
+acf(rain_timeseries_forecast_3$residuals, lag.max = 20)
+
+Box.test(rain_timeseries_forecast_3$residuals, lag = 20, type = "Ljung-Box")
+#Here the Ljung-Box test statistic is 17.4, and the p-value is 0.6, so there is little evidence of non-zero
+#autocorrelations in the in-sample forecast errors at lags 1-20.
+
+#To be sure that the predictive model cannot be improved upon, it is also a good idea to check whether the 
+#forecast errors are normally distributed with mean zero and constant variance.
+
+# To check whether the forecast errors have constant variance, we can make a time plot of the in-sample forecast errors:
+#To be sure that the predictive model cannot be improved upon, it is also a good idea to check whether the forecast errors 
+#are normally distributed with mean zero and constant variance. 
+plot.ts(rain_timeseries_forecast_3$residuals)
+
+#The plot shows that the in-sample forecast errors seem to have roughly constant variance over time
+#although the size of the fluctuations in the start of the time series (1820-1830) may be slightly less than that at 
+#later dates (eg. 1840-1850).
+
+#plotting forecast error 
+plotForecastErrors <- function(forecasterrors)
+{
+  # make a histogram of the forecast errors:
+  mybinsize <- IQR(forecasterrors)/4
+  mysd   <- sd(forecasterrors)
+  mymin  <- min(forecasterrors) - mysd*5
+  mymax  <- max(forecasterrors) + mysd*3
+  # generate normally distributed data with mean 0 and standard deviation mysd
+  mynorm <- rnorm(10000, mean=0, sd=mysd)
+  mymin2 <- min(mynorm)
+  mymax2 <- max(mynorm)
+  if (mymin2 < mymin) { mymin <- mymin2 }
+  if (mymax2 > mymax) { mymax <- mymax2 }
+  # make a red histogram of the forecast errors, with the normally distributed data overlaid:
+  mybins <- seq(mymin, mymax, mybinsize)
+  hist(forecasterrors, col="red", freq=FALSE, breaks=mybins)
+  # freq=FALSE ensures the area under the histogram = 1
+  # generate normally distributed data with mean 0 and standard deviation mysd
+  myhist <- hist(mynorm, plot=FALSE, breaks=mybins)
+  # plot the normal curve as a blue line on top of the histogram of forecast errors:
+  points(myhist$mids, myhist$density, type="l", col="blue", lwd=2)
+}
+
+plotForecastErrors(rain_timeseries_forecast_3$residuals)
+
+
+
+
+#Holt's Exponential Smoothing 
+#level , Trend - Yes  #seasonality - No
+#Holt’s exponential smoothing estimates the level and slope at the current time point.
+#Smoothing is controlled by two parameters, alpha, for the estimate of the level at the current time point
+#beta for the estimate of the slope b of the trend component at the current time point.
+
+skirts <- scan("http://robjhyndman.com/tsdldata/roberts/skirts.dat",skip=5)
+skirts_timeseries <- ts(skirts, start = c(1866))
+plot.ts(skirts_timeseries)
+
+#USing Holt's Exponential Smoothing 
+skirts_timeseries_forecasts <- HoltWinters(skirts_timeseries, gamma = FALSE)
+skirts_timeseries_forecasts
+
+#Calculating SSE
+skirts_timeseries_forecasts$SSE
+plot(skirts_timeseries_forecasts)
+
+plot(HoltWinters(skirts_timeseries, gamma = FALSE, l.start = 608, b.start =20))
+
+#Making prediction not covered by original time series 
+skirts_timeseries_forecasts1 <- forecast.HoltWinters(skirts_timeseries_forecasts, h = 19)
+plot.forecast(skirts_timeseries_forecasts1)
+
+# Checking for the possibility of improvement 
+#removing the NA's
+skirts_timeseries_forecasts1$residuals <- skirts_timeseries_forecasts1$residuals[!is.na(skirts_timeseries_forecasts1$residuals)]
+acf(skirts_timeseries_forecasts1$residuals, lag.max = 20)
+
+#Here the correlogram shows that the sample autocorrelation for the in-sample forecast errors at lag 5 exceeds the significance bounds
+#However, we would expect one in 20 of the autocorrelations for the first twenty lags to exceed the 95% significance bounds by chance alone.
+#Indeed, when we carry out the Ljung-Box test, the p-value is 0.47, indicating that there is little evidence of non-zero autocorrelations 
+#in the in-sample forecast errors at lags 1-20.
+
+#As for simple exponential smoothing, we should also check that the forecast errors have constant variance over time,
+plot.ts(skirts_timeseries_forecasts1$residuals)
+
+#The time plot of forecast errors shows that the forecast errors have roughly constant variance over time
+
+#and are normally distributed with mean zero
+plotForecastErrors(skirts_timeseries_forecasts1$residuals)
+
+#the Ljung-Box test shows that there is little evidence of autocorrelations in the forecast errors, while the time plot 
+#and histogram of forecast errors show that it is plausible that the forecast errors are normally distributed with 
+#mean zero and constant variance.
+#Therefore, we can conclude that Holt’s exponential smoothing provides an adequate predictive model for skirt hem diameters,
+#which probably cannot be improved upo
+
+
+#Holts - Winters Exponential Smoothing 
+#Level, Trend & Seasonality - Yes 
+#Holt-Winters exponential smoothing estimates the level, slope and seasonal component at the current time point.
+#alpha - for the estimate of level
+#beta  - slobe b of the trend component 
+#gamma - seasonal component 
+
+log_souvenir_timeseries <- log(souvenir_timeseries)
+souvenir_timeseries_forecasts <- HoltWinters(log_souvenir_timeseries)
+souvenir_timeseries_forecasts
+
+#The value of alpha (0.41) is relatively low, indicating that the estimate of the level at the current time point is 
+#based upon both recent observations and some observations in the more distant past
+#The value of beta is 0.00, indicating that the estimate of the slope b of the trend component is not updated over the 
+#time series, and instead is set equal to its initial value.This makes good intuitive sense, as the level changes 
+#quite a bit over the time series, but the slope b of the trend component remains roughly the same
+
+#In contrast, the value of gamma (0.96) is high, indicating that the estimate of the seasonal component at he current
+#time point is just based upon very recent observations.
+plot(souvenir_timeseries_forecasts)
+souvenir_timeseries_forecasts
+log_souvenir_timeseries
+souvenir_timeseries_forecasts_1 <- HoltWinters(log_souvenir_time_series, l.start = 9)
+plot(souvenir_timeseries_forecasts_1)
+
+souvenir_timeseries_forecasts_2 <- forecast.HoltWinters(souvenir_timeseries_forecasts, h = 48)
+plot(souvenir_timeseries_forecasts_2)
+
+#Removing NA's 
+souvenir_timeseries_forecasts_2$residuals <- souvenir_timeseries_forecasts_2$residuals[!is.na(souvenir_timeseries_forecasts_2$residuals)]
+
+#Checking for improvement 
+
+acf(souvenir_timeseries_forecasts_2$residuals, lag.max =20)
+
+#Carriying out L-jung Test
+Box.test(souvenir_timeseries_forecasts_2$residuals, lag = 20, type = "Ljung-Box")
+#The correlogram shows that the autocorrelations for the in-sample forecast errors do not exceed the significance bounds for lags 1-20
+#Furthermore, the p-value for Ljung-Box test is 0.6, indicating that there is little evidence of non-zero autocorrelations at lags 1-20.
+
+#check whether the forecast errors have constant variance over time,
+plot.ts(souvenir_timeseries_forecasts_2$residuals)
+
+#and are normally distributed with mean zero
+plotForecastErrors(souvenir_timeseries_forecasts_2$residuals)
+
+#From the time plot, it appears plausible that the forecast errors have constant variance over time
+
+# From the histogram of forecast errors, it seems plausible that the forecast errors are normally distributed with mean zero.
+
